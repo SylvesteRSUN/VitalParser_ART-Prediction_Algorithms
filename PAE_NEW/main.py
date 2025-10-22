@@ -24,6 +24,22 @@ def main():
     print(" " * 15 + "Cycle-Based Feature Extraction")
     print("=" * 70)
     
+    # ==================== 步骤0: 设置输出目录 ====================
+    import os
+    from pathlib import Path
+    
+    # 从测试文件路径提取文件名
+    test_file_path = DATA_CONFIG['test_file_path']
+    test_file_name = Path(test_file_path).stem  # 获取不带扩展名的文件名
+    
+    # 创建输出目录: results/测试文件名/
+    output_dir = os.path.join('results', test_file_name)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print(f"\n✓ Created output directory: {output_dir}")
+    else:
+        print(f"\n✓ Using output directory: {output_dir}")
+
     # ==================== 步骤1: 加载数据 ====================
     print("\n" + "=" * 70)
     print("Step 1/4: Load Training and Test Data")
@@ -129,7 +145,7 @@ def main():
     print("Generating Evaluation Reports")
     print("=" * 70)
     
-    evaluator = ModelEvaluator()
+    evaluator = ModelEvaluator(output_dir=output_dir)
     
     # 为最佳模型生成详细可视化
     best_model = trainer.best_model
@@ -184,7 +200,8 @@ def main():
     print("\n" + "=" * 70)
     print("✓ Training and Evaluation Complete!")
     print("=" * 70)
-    print(f"\nResults saved to: {evaluator.output_dir}/")
+    print(f"\nResults saved to: {output_dir}/")
+    print(f"   Test file: {test_file_name}.vital")
     
     # 检查是否达标
     print("\n" + "=" * 70)
