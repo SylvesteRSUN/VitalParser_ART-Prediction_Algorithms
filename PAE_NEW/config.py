@@ -1,23 +1,43 @@
 """
 配置文件 - 存放所有可调参数
 """
-
+from pathlib import Path
+import os
 # ==================== 数据配置 ====================
+# 尝试自动定位项目根目录（向上三级）
+_repo_root = Path(__file__).resolve().parents[2]
+
+def _collect_vital_files(directory: Path):
+    if not directory.exists():
+        return []
+    # 只在该目录及子目录中查找 .vital 文件，按字母序排序
+    files = sorted([str(p) for p in directory.rglob("*.vital")])
+    return files
+
+# 优先从仓库根目录下的 records/ 和 testset/ 读取
+_records_dir = _repo_root / "records"
+_testset_dir = _repo_root / "testset"
+
+_train_files_found = _collect_vital_files(_records_dir)
+_test_files_found = _collect_vital_files(_testset_dir)
+
 DATA_CONFIG = {
     # 训练集文件路径列表（可以有多个.vital文件）
-    'train_file_paths': [
-        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_000947.vital',  # ← 训练文件1
-        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_113224.vital',  # ← 训练文件2
-        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_173226.vital',  # ← 训练文件3
-        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_183239.vital',  # ← 训练文件4
-        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_203231.vital',  # ← 训练文件5
-        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_213243.vital',  # ← 训练文件6
-        # 可以继续添加更多文件...
+    'train_file_paths': 
+        _train_files_found if len(_train_files_found) > 0 else [
+        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_000947.vital',
+        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_113224.vital',
+        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_173226.vital',
+        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_183239.vital',
+        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_203231.vital',
+        'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230718/QUI12_230718_213243.vital',
+    # 可以继续添加更多文件...
     ],
     
     # 测试集文件路径（单个文件）
-    'test_file_path': 'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230807/QUI12_230807_163951.vital',  # ← 测试文件
-    
+    'test_file_path': _test_files_found[0] if len(_test_files_found) > 0 else
+                      'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230807/QUI12_230807_163951.vital',
+                          
     # 信号名称
     # 信号名称（支持多个候选，按优先级顺序尝试）
     'pleth_signal_candidates': [
