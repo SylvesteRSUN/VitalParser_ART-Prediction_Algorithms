@@ -19,8 +19,24 @@ DATA_CONFIG = {
     'test_file_path': 'F:/Study/KTH/UPC/PAESAV/VitalParser-main/VitalParser-main/PAE_old/VitalDB_data/VitalDB_data/230807/QUI12_230807_163951.vital',  # ← 测试文件
     
     # 信号名称
-    'pleth_signal': 'Demo/PLETH',
-    'art_signal': 'Demo/ART',
+    # 信号名称（支持多个候选，按优先级顺序尝试）
+    'pleth_signal_candidates': [
+        'Intellivue/PLETH',     # 优先级1
+        'Demo/PLETH',           # 优先级2
+        'SNUADC/PLETH',         # 优先级3
+        # 'Solar8000/PLETH',      # 优先级4
+    ],
+    
+    'art_signal_candidates': [
+        'Intellivue/ART',       # 优先级1
+        'Intellivue/ABP',       # 优先级2
+        'Demo/ART',             # 优先级3
+        'Demo/ABP',             # 优先级4
+        'SNUADC/ART',           # 优先级5
+        'SNUADC/ABP',           # 优先级6
+        # 'Solar8000/ART',        # 优先级7
+        # 'Solar8000/ABP',        # 优先级8
+    ],
     
     # 采样率（Hz）
     'sampling_rate': 100,
