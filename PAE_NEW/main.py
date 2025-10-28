@@ -1,6 +1,10 @@
 """
-主程序 - PLETH-BP预测系统（逐周期方法）
+主程序 - PLETH-BP预测系统（逐周期方法） 
 从PLETH信号预测动脉血压(ABP/ART)的机器学习系统
+
+Programa principal - sistema de predicción.
+Sistema que predice ABP/ART apartir del PLETH
+
 """
 
 import numpy as np
@@ -18,21 +22,22 @@ from evaluation import ModelEvaluator
 def main():
     """
     主函数 - 执行完整的训练和评估流程
+    Funcion principal - ejecuta el proceso completo de entrenamiento y evaluacion
     """
     print("=" * 70)
     print(" " * 20 + "PLETH-BP Prediction System")
     print(" " * 15 + "Cycle-Based Feature Extraction")
     print("=" * 70)
     
-    # ==================== 步骤0: 设置输出目录 ====================
+    # ==================== 步骤0: 设置输出目录 // Paso:0: Configuracion del output====================
     import os
     from pathlib import Path
     
-    # 从测试文件路径提取文件名
+    # 从测试文件路径提取文件名 // Extraemos el directorio desde config.py
     test_file_path = DATA_CONFIG['test_file_path']
-    test_file_name = Path(test_file_path).stem  # 获取不带扩展名的文件名
+    test_file_name = Path(test_file_path).stem  # 获取不带扩展名的文件名 // Obtenemos el nombre del archivo sin extension
     
-    # 创建输出目录: results/测试文件名/
+    # 创建输出目录: results/测试文件名/   // Creamos el directorio de salida results/NombreDelArchivo
     output_dir = os.path.join('results', test_file_name)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -40,7 +45,8 @@ def main():
     else:
         print(f"\n✓ Using output directory: {output_dir}")
 
-    # ==================== 步骤1: 加载数据 ====================
+    # ==================== 步骤1: 加载数据 // Paso 1: Cargamos los datos  ====================
+    
     print("\n" + "=" * 70)
     print("Step 1/4: Load Training and Test Data")
     print("=" * 70)
@@ -218,7 +224,7 @@ def main():
     print(f"  R²:  {best_sys_metrics['r2']:.4f}")
     
     print(f"\nDiastolic BP:")
-    print(f"  MAE: {best_dia_metrics['mae']:.2f} {'✓ PASS' if best_dia_metrics['mae'] < 10 else '✗ PASS'} (Target: <10)")
+    print(f"  MAE: {best_dia_metrics['mae']:.2f} {'✓ PASS' if best_dia_metrics['mae'] < 10 else '✗ FAIL'} (Target: <10)")
     print(f"  MSE: {best_dia_metrics['mse']:.2f} {'✓ PASS' if best_dia_metrics['mse'] < 60 else '✗ FAIL'} (Target: <60)")
     print(f"  R²:  {best_dia_metrics['r2']:.4f}")
     

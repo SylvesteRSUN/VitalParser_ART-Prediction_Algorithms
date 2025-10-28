@@ -70,25 +70,26 @@ class SignalProcessor:
         signal_filtered = self.apply_gaussian_filter(signal_sg)
         
         return signal_filtered
-    
-    def find_peaks(self, signal_data):
-        """
-        检测信号中的峰值（最大值）
+
+    def find_peaks(self, signal, signal_type='pleth'):
+        """根据信号类型检测峰值"""
+        config = SIGNAL_CONFIG
         
-        参数:
-            signal_data: 信号数组
-        
-        返回:
-            peaks: 峰值位置的索引数组
-            peak_properties: 峰值的属性字典
-        """
-        # 归一化信号以计算相对突出度
-        signal_norm = (signal_data - np.min(signal_data)) / (np.max(signal_data) - np.min(signal_data) + 1e-8)
+        # 选择参数
+        if signal_type == 'abp':
+            prominence = config.get('abp_peak_prominence', 0.03)
+            distance = config.get('abp_peak_distance', 20)
+        elif signal_type == 'art':
+            prominence = config.get('art_peak_prominence', 0.1)
+            distance = config.get('art_peak_distance', 20)
+        else:
+            prominence = config['peak_prominence']
+            distance = config['peak_distance']
         
         peaks, properties = signal.find_peaks(
-            signal_norm,
-            prominence=self.peak_prominence,
-            distance=self.peak_distance
+            signal,
+            prominence=prominence,
+            distance=distance
         )
         
         return peaks, properties
@@ -158,6 +159,16 @@ class SignalProcessor:
         返回:
             processed_data: 包含处理结果的字典
         """
+
+        """处理信号（自动识别类型）"""
+        # 判断信号类型
+        if 'ABP' in signal_name.upper():
+            signal_type = 'abp'
+        elif 'ART' in signal_name.upper():
+            signal_type = 'art'
+        else:
+            signal_type = 'pleth'
+
         print(f"\n处理 {signal_name} 信号...")
         
         # 1. 滤波

@@ -74,9 +74,20 @@ SIGNAL_CONFIG = {
     # Gaussian滤波参数
     'gaussian_sigma': 5,
     
-    # 峰值检测参数
-    'peak_prominence': 0.1,  # 相对突出度
-    'peak_distance': 20,     # 最小距离（采样点）
+    # PLETH信号参数
+    'peak_prominence': 0.2,
+    'peak_distance': 30,
+    
+    # ART信号参数（尖锐波形）
+    'art_peak_prominence': 0.1,
+    'art_peak_distance': 20,
+    
+    # ABP信号参数（平滑波形）← 新增
+    'abp_peak_prominence': 0.03,  # 更敏感
+    'abp_peak_distance': 20,
+    
+    # 谷值检测
+    'valley_prominence': 0.05,  # ABP谷值也需要调低
 }
 
 # ==================== 特征提取配置 ====================
