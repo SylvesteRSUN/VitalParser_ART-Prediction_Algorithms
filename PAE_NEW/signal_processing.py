@@ -71,7 +71,7 @@ class SignalProcessor:
         
         return signal_filtered
 
-    def find_peaks(self, signal, signal_type='pleth'):
+    def find_peaks(self, signal_data, signal_type='pleth'):
         """根据信号类型检测峰值"""
         config = SIGNAL_CONFIG
         
@@ -87,7 +87,7 @@ class SignalProcessor:
             distance = config['peak_distance']
         
         peaks, properties = signal.find_peaks(
-            signal,
+            signal_data,
             prominence=prominence,
             distance=distance
         )
