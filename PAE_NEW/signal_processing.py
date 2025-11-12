@@ -94,17 +94,34 @@ class SignalProcessor:
         
         return peaks, properties
     
-    def find_valleys(self, signal_data):
+    def find_valleys(self, signal_data, signal_type='pleth'):
         """
-        检测信号中的谷值（最小值）
+        检测信号中的谷值（最小值）- 支持信号类型
         
         参数:
             signal_data: 信号数组
+            signal_type: 信号类型 ('pleth', 'art', 'abp')
         
         返回:
             valleys: 谷值位置的索引数组
             valley_properties: 谷值的属性字典
         """
+        # 选择参数（与峰值检测一致）
+        config = SIGNAL_CONFIG
+        
+        if signal_type == 'abp':
+            prominence = config.get('abp_peak_prominence', 0.03)
+            distance = config.get('abp_peak_distance', 20)
+        elif signal_type == 'art':
+            prominence = config.get('art_peak_prominence', 0.1)
+            distance = config.get('art_peak_distance', 20)
+        else:
+            prominence = config['peak_prominence']
+            distance = config['peak_distance']
+        
+        # 如果配置中有专门的谷值参数，使用它
+        valley_prominence = config.get('valley_prominence', prominence * 0.5)  # 谷值通常需要更低
+        
         # 反转信号以检测谷值
         signal_inverted = -signal_data
         
@@ -113,8 +130,8 @@ class SignalProcessor:
         
         valleys, properties = signal.find_peaks(
             signal_norm,
-            prominence=self.peak_prominence,
-            distance=self.peak_distance
+            prominence=valley_prominence,  # 使用动态参数
+            distance=distance
         )
         
         return valleys, properties
@@ -176,8 +193,8 @@ class SignalProcessor:
         print(f"  ✓ 滤波完成")
         
         # 2. 检测峰值和谷值
-        peaks, peak_props = self.find_peaks(filtered_signal)
-        valleys, valley_props = self.find_valleys(filtered_signal)
+        peaks, peak_props = self.find_peaks(filtered_signal, signal_type)
+        valleys, valley_props = self.find_valleys(filtered_signal, signal_type)
         print(f"  ✓ 检测到 {len(peaks)} 个峰值, {len(valleys)} 个谷值")
         
         # 3. 计算周期积分
