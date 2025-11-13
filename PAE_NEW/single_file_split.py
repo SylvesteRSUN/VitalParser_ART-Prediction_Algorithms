@@ -78,13 +78,25 @@ def split_vital_file(input_path, output_dir='results', train_ratio=0.7):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print("用法: python split_vital.py <input.vital> [output_dir] [train_ratio]")
-        print("示例: python split_vital.py data/0002.vital results 0.7")
-        sys.exit(1)
-    
-    input_path = sys.argv[1]
-    output_dir = sys.argv[2] if len(sys.argv) > 2 else 'results'
-    train_ratio = float(sys.argv[3]) if len(sys.argv) > 3 else 0.7
+        # 交互式输入
+        print("=" * 70)
+        print("VITAL 文件切分工具")
+        print("=" * 70)
+        print()
+        
+        input_path = input("请输入 .vital 文件路径: ").strip().strip('"').strip("'")
+        output_dir = input("请输入输出目录 (默认 'results'): ").strip() or 'results'
+        train_ratio_str = input("请输入训练集比例 (默认 0.7): ").strip() or '0.7'
+        
+        try:
+            train_ratio = float(train_ratio_str)
+        except ValueError:
+            print("错误: 训练集比例必须是数字")
+            sys.exit(1)
+    else:
+        input_path = sys.argv[1]
+        output_dir = sys.argv[2] if len(sys.argv) > 2 else 'results'
+        train_ratio = float(sys.argv[3]) if len(sys.argv) > 3 else 0.7
     
     if not os.path.exists(input_path):
         print(f"错误: 文件不存在 - {input_path}")
