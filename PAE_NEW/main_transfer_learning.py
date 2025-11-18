@@ -14,7 +14,7 @@ import argparse
 import time
 
 # Import existing modules / 导入现有模块
-from config import DATA_CONFIG, SIGNAL_CONFIG, FEATURE_CONFIG, EVALUATION_CONFIG
+from config import DATA_CONFIG
 from data_loader import load_train_test_data
 from signal_processing import SignalProcessor
 from feature_extraction import CycleBasedFeatureExtractor
@@ -52,6 +52,11 @@ class TransferLearningPipeline:
 
         # Results storage / 结果存储
         self.results = {}
+
+        # Test data storage (loaded in _load_and_process_training_data)
+        # 测试数据存储（在_load_and_process_training_data中加载）
+        self._pleth_test = None
+        self._art_test = None
 
     def run_complete_pipeline(self):
         """
@@ -132,41 +137,40 @@ class TransferLearningPipeline:
         加载并处理所有训练数据。
         """
         # Load training files / 加载训练文件
-        train_data_all, _ = load_train_test_data(DATA_CONFIG)
+        # load_train_test_data returns (pleth_train, art_train, pleth_test, art_test)
+        # Training data is already combined from multiple files
+        pleth_train, art_train, pleth_test, art_test = load_train_test_data()
+
+        if pleth_train is None:
+            raise ValueError("Failed to load training data")
+
+        # Store test data for later use / 存储测试数据供后续使用
+        self._pleth_test = pleth_test
+        self._art_test = art_test
 
         # Process signals / 处理信号
-        processor = SignalProcessor(SIGNAL_CONFIG)
+        # SignalProcessor and CycleBasedFeatureExtractor use config internally
+        processor = SignalProcessor()
 
-        X_train_list = []
-        y_train_sys_list = []
-        y_train_dia_list = []
+        if self.verbose:
+            print(f"\n  Processing training data...")
 
-        for i, (pleth_raw, art_raw) in enumerate(train_data_all):
-            if self.verbose:
-                print(f"\n  Processing training file {i + 1}/{len(train_data_all)}...")
+        # Apply signal processing / 应用信号处理
+        pleth_processed = processor.process_signal(pleth_train, 'PLETH')
+        art_processed = processor.process_signal(art_train, 'ART')
 
-            # Apply signal processing / 应用信号处理
-            pleth_processed = processor.process_signal(pleth_raw, 'PLETH')
-            art_processed = processor.process_signal(art_raw, 'ART')
+        # Extract features / 提取特征
+        # prepare_cycle_based_dataset returns (X, y_systolic, y_diastolic)
+        extractor = CycleBasedFeatureExtractor()
+        X_train, y_train_sys, y_train_dia = extractor.prepare_cycle_based_dataset(
+            pleth_processed, art_processed
+        )
 
-            # Extract features / 提取特征
-            extractor = CycleBasedFeatureExtractor(FEATURE_CONFIG)
-            X, y_sys, y_dia, _ = extractor.extract_features(
-                pleth_processed, art_processed
-            )
+        if len(X_train) == 0:
+            raise ValueError("No valid training cycles extracted")
 
-            if len(X) > 0:
-                X_train_list.append(X)
-                y_train_sys_list.append(y_sys)
-                y_train_dia_list.append(y_dia)
-
-                if self.verbose:
-                    print(f"    Extracted {len(X)} cycles")
-
-        # Combine all training data / 合并所有训练数据
-        X_train = np.vstack(X_train_list)
-        y_train_sys = np.concatenate(y_train_sys_list)
-        y_train_dia = np.concatenate(y_train_dia_list)
+        if self.verbose:
+            print(f"    Extracted {len(X_train)} cycles from training data")
 
         # Standardize features / 标准化特征
         from sklearn.preprocessing import StandardScaler
@@ -203,19 +207,28 @@ class TransferLearningPipeline:
         Load and process test data.
         加载并处理测试数据。
         """
-        _, test_data = load_train_test_data(DATA_CONFIG)
-        pleth_raw, art_raw = test_data
+        # Use test data already loaded in _load_and_process_training_data
+        # 使用在_load_and_process_training_data中已经加载的测试数据
+        pleth_raw = self._pleth_test
+        art_raw = self._art_test
+
+        if pleth_raw is None or art_raw is None:
+            raise ValueError("Test data not loaded")
 
         # Process signals / 处理信号
-        processor = SignalProcessor(SIGNAL_CONFIG)
+        processor = SignalProcessor()
         pleth_processed = processor.process_signal(pleth_raw, 'PLETH')
         art_processed = processor.process_signal(art_raw, 'ART')
 
         # Extract features / 提取特征
-        extractor = CycleBasedFeatureExtractor(FEATURE_CONFIG)
-        X_test, y_test_sys, y_test_dia, _ = extractor.extract_features(
+        # prepare_cycle_based_dataset returns (X, y_systolic, y_diastolic)
+        extractor = CycleBasedFeatureExtractor()
+        X_test, y_test_sys, y_test_dia = extractor.prepare_cycle_based_dataset(
             pleth_processed, art_processed
         )
+
+        if len(X_test) == 0:
+            raise ValueError("No valid test cycles extracted")
 
         # Standardize using training scaler / 使用训练集的标准化器
         X_test = scaler.transform(X_test)
@@ -291,7 +304,11 @@ class TransferLearningPipeline:
         """
         model_type = GENERAL_MODEL_CONFIG['model_type']
         strategy = FINE_TUNING_CONFIG['strategy']
+
+        # Copy fine-tuning params and remove 'strategy' to avoid duplicate
+        # 复制微调参数并移除'strategy'以避免重复
         fine_tune_params = FINE_TUNING_CONFIG.copy()
+        fine_tune_params.pop('strategy', None)
 
         # Create fine-tuner / 创建微调器
         fine_tuner = PersonalFineTuner(
@@ -455,7 +472,7 @@ class TransferLearningPipeline:
         )
         os.makedirs(os.path.dirname(report_path), exist_ok=True)
 
-        with open(report_path, 'w') as f:
+        with open(report_path, 'w', encoding='utf-8') as f:
             f.write("=" * 80 + "\n")
             f.write(" TRANSFER LEARNING REPORT / 迁移学习报告\n")
             f.write("=" * 80 + "\n\n")
