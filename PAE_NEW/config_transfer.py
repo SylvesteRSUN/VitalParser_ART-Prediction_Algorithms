@@ -68,16 +68,17 @@ FINE_TUNING_CONFIG = {
     'strategy': 'incremental',
 
     # XGBoost fine-tuning parameters / XGBoost微调参数
+    # Optimized for better tracking of BP variations / 优化以更好地跟踪血压变化
     'xgboost': {
-        'n_estimators': 100,      # Number of new trees to add / 增量添加的树数量
-        'learning_rate': 0.01,    # Reduced learning rate / 降低的学习率
-        'max_depth': 10,          # Keep consistent with general model / 与通用模型保持一致
-        'subsample': 1.0,         # Use all calibration data / 使用所有校准数据
+        'n_estimators': 200,      # Number of new trees to add / 增量添加的树数量
+        'learning_rate': 0.05,    # Higher LR for better sensitivity / 更高的学习率以获得更好的敏感性
+        'max_depth': 15,          # Deeper trees for complex patterns / 更深的树以捕获复杂模式
+        'subsample': 0.9,         # Slight subsampling / 轻微子采样
         'colsample_bytree': 0.8,
-        'min_child_weight': 3,
-        'gamma': 0.1,
-        'reg_alpha': 0.05,        # Increased regularization / 增加正则化
-        'reg_lambda': 2.0,
+        'min_child_weight': 1,    # Allow finer splits / 允许更细的分裂
+        'gamma': 0.05,            # Lower gamma / 更低的gamma
+        'reg_alpha': 0.01,        # Reduced L1 regularization / 减少L1正则化
+        'reg_lambda': 0.5,        # Reduced L2 regularization / 减少L2正则化
         'random_state': 42,
         'n_jobs': -1,
         'verbosity': 1
@@ -118,10 +119,11 @@ DATA_SPLIT_CONFIG = {
     'split_method': 'sample_based',
 
     # Sample-based split / 基于样本的分割
+    # Increased for better personalization / 增加以获得更好的个性化
     'sample_based': {
-        'n_samples': 200,  # Number of heartbeats for calibration / 用于校准的心跳数量
-        'min_samples': 100,  # Minimum required samples / 最小所需样本数
-        'max_samples': 300   # Maximum calibration samples / 最大校准样本数
+        'n_samples': 450,  # Number of heartbeats for calibration / 用于校准的心跳数量
+        'min_samples': 250,  # Minimum required samples / 最小所需样本数
+        'max_samples': 700   # Maximum calibration samples / 最大校准样本数
     },
 
     # Time-based split / 基于时间的分割
