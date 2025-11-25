@@ -81,6 +81,14 @@ class TransferLearningPipeline:
             X_train, y_train_sys, y_train_dia
         )
 
+        # Step 2.5: Diagnose general model on training set (Plan C)
+        # 步骤2.5：诊断通用模型在训练集上的表现（方案C）
+        print("\n[DIAGNOSTICS] Evaluating General Models on Training Set...")
+        self._diagnose_training_performance(
+            general_model_sys, general_model_dia,
+            X_train, y_train_sys, y_train_dia
+        )
+
         # Step 3: Save general models / 步骤3：保存通用模型
         print("\n[STEP 3/7] Saving General Models...")
         self._save_general_models(general_model_sys, general_model_dia)
@@ -196,6 +204,78 @@ class TransferLearningPipeline:
         )
 
         return model_sys, model_dia
+
+    def _diagnose_training_performance(self, model_sys, model_dia, X_train, y_train_sys, y_train_dia):
+        """
+        Diagnose general model performance on training set (Plan C).
+        诊断通用模型在训练集上的表现（方案C）。
+
+        This helps identify if the model is underfitting or if there are data issues.
+        这有助于识别模型是否欠拟合或是否存在数据问题。
+        """
+        from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+        # Predict on training set / 在训练集上预测
+        y_pred_sys = model_sys.predict(X_train)
+        y_pred_dia = model_dia.predict(X_train)
+
+        # Calculate metrics / 计算指标
+        train_mae_sys = mean_absolute_error(y_train_sys, y_pred_sys)
+        train_mae_dia = mean_absolute_error(y_train_dia, y_pred_dia)
+        train_mse_sys = mean_squared_error(y_train_sys, y_pred_sys)
+        train_mse_dia = mean_squared_error(y_train_dia, y_pred_dia)
+        train_r2_sys = r2_score(y_train_sys, y_pred_sys)
+        train_r2_dia = r2_score(y_train_dia, y_pred_dia)
+
+        # Print diagnostics / 打印诊断信息
+        print("\n  === Training Set Performance (Diagnostic) ===")
+        print("  === 训练集性能（诊断） ===")
+        print(f"\n  Systolic / 收缩压:")
+        print(f"    MAE: {train_mae_sys:.2f} mmHg")
+        print(f"    MSE: {train_mse_sys:.2f}")
+        print(f"    R²:  {train_r2_sys:.4f}")
+        print(f"\n  Diastolic / 舒张压:")
+        print(f"    MAE: {train_mae_dia:.2f} mmHg")
+        print(f"    MSE: {train_mse_dia:.2f}")
+        print(f"    R²:  {train_r2_dia:.4f}")
+
+        # Analyze prediction distribution / 分析预测分布
+        print(f"\n  Prediction Analysis / 预测分析:")
+        print(f"    Systolic - True range: [{y_train_sys.min():.1f}, {y_train_sys.max():.1f}], "
+              f"Pred range: [{y_pred_sys.min():.1f}, {y_pred_sys.max():.1f}]")
+        print(f"    Diastolic - True range: [{y_train_dia.min():.1f}, {y_train_dia.max():.1f}], "
+              f"Pred range: [{y_pred_dia.min():.1f}, {y_pred_dia.max():.1f}]")
+
+        # Check for issues / 检查问题
+        pred_range_sys = y_pred_sys.max() - y_pred_sys.min()
+        true_range_sys = y_train_sys.max() - y_train_sys.min()
+        pred_range_dia = y_pred_dia.max() - y_pred_dia.min()
+        true_range_dia = y_train_dia.max() - y_train_dia.min()
+
+        if pred_range_sys < 0.5 * true_range_sys:
+            print(f"\n  ⚠ WARNING: Systolic prediction range ({pred_range_sys:.1f}) is much smaller than true range ({true_range_sys:.1f})")
+            print(f"    This suggests the model is not capturing variations well.")
+            print(f"    警告: 收缩压预测范围过小，模型未能很好捕获变化。")
+
+        if pred_range_dia < 0.5 * true_range_dia:
+            print(f"\n  ⚠ WARNING: Diastolic prediction range ({pred_range_dia:.1f}) is much smaller than true range ({true_range_dia:.1f})")
+            print(f"    This suggests the model is not capturing variations well.")
+            print(f"    警告: 舒张压预测范围过小，模型未能很好捕获变化。")
+
+        if train_r2_sys < 0.5:
+            print(f"\n  ⚠ WARNING: Low R² on training set ({train_r2_sys:.4f})")
+            print(f"    The general model may be underfitting. Consider:")
+            print(f"    - Increasing model complexity (more trees, deeper)")
+            print(f"    - Adding more informative features")
+            print(f"    警告: 训练集R²过低，通用模型可能欠拟合。")
+
+        # Store for comparison / 存储用于比较
+        self.results['train_performance'] = {
+            'systolic': {'MAE': train_mae_sys, 'MSE': train_mse_sys, 'R2': train_r2_sys},
+            'diastolic': {'MAE': train_mae_dia, 'MSE': train_mse_dia, 'R2': train_r2_dia}
+        }
+
+        print("\n  " + "-" * 50)
 
     def _save_general_models(self, model_sys, model_dia):
         """Save general models / 保存通用模型"""

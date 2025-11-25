@@ -11,6 +11,7 @@ feature_extraction.py
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 from config import FEATURE_CONFIG, DATA_CONFIG
+from collections import deque
 
 
 def detect_valid_segments(signal, segment_duration=60, sample_rate=100, 
@@ -136,19 +137,32 @@ def extract_valid_signal_portions(signal, valid_segments):
 
 
 class CycleBasedFeatureExtractor:
-    """基于心跳周期的特征提取器（增强版 - 带有效片段检测）"""
-    
-    def __init__(self, enable_segment_detection=True):
+    """
+    基于心跳周期的特征提取器（增强版 - 带时序特征和有效片段检测）
+    Enhanced cycle-based feature extractor with temporal features
+    """
+
+    def __init__(self, enable_segment_detection=True, enable_temporal_features=True):
         """
         初始化特征提取器
-        
-        参数:
-            enable_segment_detection: 是否启用有效片段检测
+        Initialize feature extractor
+
+        参数 / Args:
+            enable_segment_detection: 是否启用有效片段检测 / Enable valid segment detection
+            enable_temporal_features: 是否启用时序特征 / Enable temporal features
         """
         self.scaler = StandardScaler() if FEATURE_CONFIG['standardize_features'] else None
         self.feature_names = []
         self.enable_segment_detection = enable_segment_detection
+        self.enable_temporal_features = enable_temporal_features
         self.sample_rate = DATA_CONFIG['sampling_rate']
+
+        # Temporal feature parameters / 时序特征参数
+        self.lag_steps = 3  # Number of previous cycles to use / 使用的历史周期数
+        self.window_size = 5  # Sliding window size / 滑动窗口大小
+
+        # Feature history buffer / 特征历史缓冲区
+        self.feature_history = deque(maxlen=max(self.lag_steps, self.window_size))
     
     def extract_single_cycle_features(self, cycle_signal, cycle_peaks, cycle_valleys):
         """
@@ -234,8 +248,92 @@ class CycleBasedFeatureExtractor:
         
         kurtosis = np.mean(((cycle_signal - mean_val) / std_val) ** 4)
         features.append(kurtosis)
-        
+
+        # === Enhanced features (Plan D) / 增强特征 (方案D) ===
+
+        # Derivative features (4维) / 导数特征
+        first_derivative = np.diff(cycle_signal)
+        if len(first_derivative) > 0:
+            features.append(np.max(first_derivative))  # Max rise rate / 最大上升速率
+            features.append(np.min(first_derivative))  # Max fall rate / 最大下降速率
+            features.append(np.std(first_derivative))  # Derivative variability / 导数变异性
+        else:
+            features.extend([0, 0, 0])
+
+        second_derivative = np.diff(first_derivative) if len(first_derivative) > 1 else np.array([0])
+        features.append(np.std(second_derivative) if len(second_derivative) > 0 else 0)  # Acceleration variability / 加速度变异性
+
+        # Morphology ratios (3维) / 形态比率
+        cycle_len = len(cycle_signal)
+        if cycle_len > 4:
+            # Split cycle into quarters / 将周期分成四份
+            q1 = np.mean(cycle_signal[:cycle_len // 4])
+            q2 = np.mean(cycle_signal[cycle_len // 4:cycle_len // 2])
+            q3 = np.mean(cycle_signal[cycle_len // 2:3 * cycle_len // 4])
+            q4 = np.mean(cycle_signal[3 * cycle_len // 4:])
+
+            features.append(q1 / (q3 + 1e-8))  # Rise vs fall ratio / 上升/下降比率
+            features.append((q1 + q2) / (q3 + q4 + 1e-8))  # First half vs second half / 前半/后半比率
+            features.append(np.abs(q2 - q3) / (std_val + 1e-8))  # Peak area asymmetry / 峰值区域不对称性
+        else:
+            features.extend([1.0, 1.0, 0])
+
+        # Cycle length feature (1维) / 周期长度特征
+        features.append(cycle_len / self.sample_rate)  # Cycle duration in seconds / 周期持续时间(秒)
+
         return np.array(features)
+
+    def compute_temporal_features(self, current_features, feature_history):
+        """
+        计算时序特征（方案A）
+        Compute temporal features (Plan A)
+
+        Args:
+            current_features: 当前周期的基础特征 / Current cycle base features
+            feature_history: 历史特征队列 / Feature history queue
+
+        Returns:
+            temporal_features: 时序特征向量 / Temporal feature vector
+        """
+        temporal_features = []
+        history_list = list(feature_history)
+
+        # Key feature indices for temporal analysis / 用于时序分析的关键特征索引
+        key_indices = [0, 2, 4, 10, 12]  # mean, max, peak_value, pulse_amplitude, asymmetry
+
+        for idx in key_indices:
+            current_val = current_features[idx]
+
+            # Lag features (3维) / 滞后特征
+            for lag in range(1, self.lag_steps + 1):
+                if len(history_list) >= lag:
+                    lag_val = history_list[-lag][idx]
+                    temporal_features.append(current_val - lag_val)  # Change from lag / 与滞后值的变化
+                else:
+                    temporal_features.append(0)
+
+            # Sliding window statistics (2维) / 滑动窗口统计
+            if len(history_list) >= 2:
+                window_vals = [h[idx] for h in history_list[-self.window_size:]] + [current_val]
+                temporal_features.append(np.mean(window_vals))  # Window mean / 窗口均值
+                temporal_features.append(np.std(window_vals))  # Window std / 窗口标准差
+            else:
+                temporal_features.extend([current_val, 0])
+
+        # HRV-like features (2维) / 类心率变异性特征
+        # Based on cycle duration (last feature in current_features)
+        cycle_duration_idx = len(current_features) - 1  # Cycle duration is the last feature
+        current_rr = current_features[cycle_duration_idx]
+
+        if len(history_list) >= 2:
+            rr_intervals = [h[cycle_duration_idx] for h in history_list[-self.window_size:]] + [current_rr]
+            rr_diffs = np.diff(rr_intervals)
+            temporal_features.append(np.std(rr_diffs) if len(rr_diffs) > 0 else 0)  # SDNN-like / 类SDNN
+            temporal_features.append(np.sqrt(np.mean(np.square(rr_diffs))) if len(rr_diffs) > 0 else 0)  # RMSSD-like / 类RMSSD
+        else:
+            temporal_features.extend([0, 0])
+
+        return np.array(temporal_features)
     
     def is_valid_cycle(self, cycle_signal, cycle_length, target_systolic=None, target_diastolic=None):
         """
@@ -428,11 +526,20 @@ class CycleBasedFeatureExtractor:
                     rejected_reasons['quality_check_failed'] += 1
                 continue
             
-            # 提取特征
-            features = self.extract_single_cycle_features(
+            # 提取基础特征 / Extract base features
+            base_features = self.extract_single_cycle_features(
                 cycle_signal, cycle_peaks_rel, cycle_valleys_rel
             )
-            
+
+            # 计算时序特征 / Compute temporal features
+            if self.enable_temporal_features:
+                temporal_features = self.compute_temporal_features(base_features, self.feature_history)
+                features = np.concatenate([base_features, temporal_features])
+                # Update history / 更新历史
+                self.feature_history.append(base_features)
+            else:
+                features = base_features
+
             X.append(features)
             y_systolic.append(systolic)
             y_diastolic.append(diastolic)
@@ -457,15 +564,33 @@ class CycleBasedFeatureExtractor:
             print(f"  收缩压范围: [{y_systolic.min():.1f}, {y_systolic.max():.1f}] mmHg (均值: {y_systolic.mean():.1f})")
             print(f"  舒张压范围: [{y_diastolic.min():.1f}, {y_diastolic.max():.1f}] mmHg (均值: {y_diastolic.mean():.1f})")
         
-        # 定义特征名称
-        self.feature_names = [
+        # 定义特征名称 / Define feature names
+        base_feature_names = [
             'mean', 'std', 'max', 'min',
             'peak_value', 'peak_position', 'peak_width', 'peak_slope',
             'valley_value', 'valley_position',
             'pulse_amplitude', 'pulse_ratio', 'asymmetry',
             'integral', 'integral_norm',
-            'skewness', 'kurtosis'
+            'skewness', 'kurtosis',
+            # Enhanced features (Plan D) / 增强特征
+            'max_rise_rate', 'max_fall_rate', 'derivative_std', 'acceleration_std',
+            'rise_fall_ratio', 'half_ratio', 'peak_asymmetry',
+            'cycle_duration'
         ]
+
+        if self.enable_temporal_features:
+            # Temporal feature names / 时序特征名称
+            temporal_feature_names = []
+            key_features = ['mean', 'max', 'peak_value', 'pulse_amplitude', 'asymmetry']
+            for feat in key_features:
+                for lag in range(1, self.lag_steps + 1):
+                    temporal_feature_names.append(f'{feat}_lag{lag}')
+                temporal_feature_names.append(f'{feat}_window_mean')
+                temporal_feature_names.append(f'{feat}_window_std')
+            temporal_feature_names.extend(['rr_sdnn', 'rr_rmssd'])
+            self.feature_names = base_feature_names + temporal_feature_names
+        else:
+            self.feature_names = base_feature_names
         
         # 标准化特征
         if self.scaler is not None and len(X) > 0:
