@@ -163,6 +163,10 @@ class CycleBasedFeatureExtractor:
 
         # Feature history buffer / 特征历史缓冲区
         self.feature_history = deque(maxlen=max(self.lag_steps, self.window_size))
+
+        # BP state-aware feature parameters (Plan F) / 血压状态感知特征参数（方案F）
+        self.bp_history = deque(maxlen=10)  # Store recent BP values / 存储最近的血压值
+        self.enable_bp_state_features = True  # Enable BP state features / 启用血压状态特征
     
     def extract_single_cycle_features(self, cycle_signal, cycle_peaks, cycle_valleys):
         """
@@ -334,7 +338,130 @@ class CycleBasedFeatureExtractor:
             temporal_features.extend([0, 0])
 
         return np.array(temporal_features)
-    
+
+    def compute_bp_state_features(self, current_features, bp_history, _unused):
+        """
+        计算血压状态感知特征（方案F）- 帮助模型识别极端值和趋势
+        Compute BP state-aware features (Plan F) - Help model track extreme values and trends
+
+        Args:
+            current_features: 当前周期的基础特征 / Current cycle base features
+            bp_history: 历史血压值 (systolic, diastolic) 元组列表 / Historical BP values as (sys, dia) tuples
+            _unused: 未使用参数（保持接口一致性）/ Unused parameter (for interface consistency)
+
+        Returns:
+            bp_state_features: 血压状态特征向量 / BP state feature vector
+        """
+        bp_state_features = []
+
+        # Extract key predictive features / 提取关键预测特征
+        pulse_amplitude = current_features[10]  # Feature index 10: pulse_amplitude
+        peak_value = current_features[4]  # Feature index 4: peak_value
+        mean_value = current_features[0]  # Feature index 0: mean
+
+        # Extract systolic and diastolic history from tuples / 从元组中提取收缩压和舒张压历史
+        if len(bp_history) >= 3:
+            sys_history = [bp[0] for bp in bp_history]
+            dia_history = [bp[1] for bp in bp_history]
+        else:
+            sys_history = []
+            dia_history = []
+
+        # === Z-score features (6维) / Z分数特征 ===
+        # Measure how far current features deviate from recent history
+        # 衡量当前特征与近期历史的偏差程度
+        if len(sys_history) >= 3:
+            # Systolic BP z-score estimation / 收缩压Z分数估计
+            sys_mean = np.mean(sys_history)
+            sys_std = np.std(sys_history) + 1e-8
+
+            # Estimate current systolic using pulse amplitude / 使用脉搏幅度估计当前收缩压
+            # Higher pulse amplitude typically correlates with higher systolic BP
+            estimated_sys_deviation = (pulse_amplitude - np.mean([current_features[10] for _ in range(1)]))
+            bp_state_features.append(estimated_sys_deviation / sys_std)  # Normalized deviation / 归一化偏差
+
+            # Diastolic BP z-score estimation / 舒张压Z分数估计
+            dia_mean = np.mean(dia_history)
+            dia_std = np.std(dia_history) + 1e-8
+
+            estimated_dia_deviation = (mean_value - np.mean([current_features[0] for _ in range(1)]))
+            bp_state_features.append(estimated_dia_deviation / dia_std)
+
+            # Pulse pressure z-score / 脉压差Z分数
+            pulse_pressure_history = [s - d for s, d in zip(sys_history, dia_history)]
+            pp_mean = np.mean(pulse_pressure_history)
+            pp_std = np.std(pulse_pressure_history) + 1e-8
+            estimated_pp = pulse_amplitude * 0.8  # Rough estimation / 粗略估计
+            bp_state_features.append((estimated_pp - pp_mean) / pp_std)
+
+            # Feature deviation from population mean / 特征偏离总体均值
+            bp_state_features.append((peak_value - sys_mean) / sys_std)  # Peak value deviation
+            bp_state_features.append((mean_value - dia_mean) / dia_std)  # Mean value deviation
+            bp_state_features.append((pulse_amplitude - pp_mean) / pp_std)  # Pulse amplitude deviation
+        else:
+            bp_state_features.extend([0, 0, 0, 0, 0, 0])
+
+        # === Binary abnormal range indicators (4维) / 异常范围二元指示器 ===
+        # Help model explicitly recognize extreme BP states
+        # 帮助模型明确识别极端血压状态
+        if len(sys_history) >= 3:
+
+            # High BP indicators / 高血压指示器
+            # If recent average is high (>140 systolic or >90 diastolic)
+            recent_sys_mean = np.mean(sys_history[-3:])
+            recent_dia_mean = np.mean(dia_history[-3:])
+
+            is_high_sys = 1.0 if recent_sys_mean > 140 else 0.0
+            is_high_dia = 1.0 if recent_dia_mean > 90 else 0.0
+
+            # Low BP indicators / 低血压指示器
+            # If recent average is low (<100 systolic or <60 diastolic)
+            is_low_sys = 1.0 if recent_sys_mean < 100 else 0.0
+            is_low_dia = 1.0 if recent_dia_mean < 60 else 0.0
+
+            bp_state_features.extend([is_high_sys, is_high_dia, is_low_sys, is_low_dia])
+        else:
+            bp_state_features.extend([0, 0, 0, 0])
+
+        # === BP trend features (6维) / 血压趋势特征 ===
+        # Capture whether BP is rising, falling, or stable
+        # 捕获血压是上升、下降还是稳定
+        if len(sys_history) >= 5:
+
+            # Recent trend (last 3 values) / 近期趋势（最近3个值）
+            recent_sys = sys_history[-3:]
+            recent_dia = dia_history[-3:]
+
+            # Systolic trend / 收缩压趋势
+            sys_trend = np.mean(np.diff(recent_sys))  # Average change per beat / 每搏平均变化
+            bp_state_features.append(sys_trend)
+            bp_state_features.append(1.0 if sys_trend > 2 else 0.0)  # Is rising? / 是否上升？
+            bp_state_features.append(1.0 if sys_trend < -2 else 0.0)  # Is falling? / 是否下降？
+
+            # Diastolic trend / 舒张压趋势
+            dia_trend = np.mean(np.diff(recent_dia))
+            bp_state_features.append(dia_trend)
+            bp_state_features.append(1.0 if dia_trend > 2 else 0.0)  # Is rising?
+            bp_state_features.append(1.0 if dia_trend < -2 else 0.0)  # Is falling?
+        else:
+            bp_state_features.extend([0, 0, 0, 0, 0, 0])
+
+        # === Variability indicators (2维) / 变异性指示器 ===
+        # High variability may indicate unstable BP state
+        # 高变异性可能表示不稳定的血压状态
+        if len(sys_history) >= 5:
+
+            # Coefficient of variation (CV) = std / mean
+            sys_cv = np.std(sys_history) / (np.mean(sys_history) + 1e-8)
+            dia_cv = np.std(dia_history) / (np.mean(dia_history) + 1e-8)
+
+            bp_state_features.append(sys_cv)
+            bp_state_features.append(dia_cv)
+        else:
+            bp_state_features.extend([0, 0])
+
+        return np.array(bp_state_features)
+
     def is_valid_cycle(self, cycle_signal, cycle_length, target_systolic=None, target_diastolic=None):
         """
         检查单个周期是否有效（增强版质量控制）
@@ -534,9 +661,31 @@ class CycleBasedFeatureExtractor:
             # 计算时序特征 / Compute temporal features
             if self.enable_temporal_features:
                 temporal_features = self.compute_temporal_features(base_features, self.feature_history)
-                features = np.concatenate([base_features, temporal_features])
                 # Update history / 更新历史
                 self.feature_history.append(base_features)
+            else:
+                temporal_features = np.array([])
+
+            # 计算血压状态感知特征 (Plan F) / Compute BP state-aware features (Plan F)
+            if self.enable_bp_state_features:
+                # Use actual BP values from current and history
+                bp_state_features = self.compute_bp_state_features(
+                    base_features,
+                    self.bp_history,  # Will contain (systolic, diastolic) tuples
+                    self.bp_history  # Using same history, will extract separately in method
+                )
+                # Update BP history with current values / 更新血压历史
+                self.bp_history.append((systolic, diastolic))
+            else:
+                bp_state_features = np.array([])
+
+            # Combine all features / 组合所有特征
+            if self.enable_temporal_features and self.enable_bp_state_features:
+                features = np.concatenate([base_features, temporal_features, bp_state_features])
+            elif self.enable_temporal_features:
+                features = np.concatenate([base_features, temporal_features])
+            elif self.enable_bp_state_features:
+                features = np.concatenate([base_features, bp_state_features])
             else:
                 features = base_features
 
@@ -578,9 +727,9 @@ class CycleBasedFeatureExtractor:
             'cycle_duration'
         ]
 
+        temporal_feature_names = []
         if self.enable_temporal_features:
             # Temporal feature names / 时序特征名称
-            temporal_feature_names = []
             key_features = ['mean', 'max', 'peak_value', 'pulse_amplitude', 'asymmetry']
             for feat in key_features:
                 for lag in range(1, self.lag_steps + 1):
@@ -588,9 +737,25 @@ class CycleBasedFeatureExtractor:
                 temporal_feature_names.append(f'{feat}_window_mean')
                 temporal_feature_names.append(f'{feat}_window_std')
             temporal_feature_names.extend(['rr_sdnn', 'rr_rmssd'])
-            self.feature_names = base_feature_names + temporal_feature_names
-        else:
-            self.feature_names = base_feature_names
+
+        bp_state_feature_names = []
+        if self.enable_bp_state_features:
+            # BP state-aware feature names (Plan F) / 血压状态感知特征名称（方案F）
+            bp_state_feature_names = [
+                # Z-score features (6维)
+                'sys_zscore', 'dia_zscore', 'pp_zscore',
+                'peak_sys_deviation', 'mean_dia_deviation', 'pulse_pp_deviation',
+                # Binary abnormal indicators (4维)
+                'is_high_sys', 'is_high_dia', 'is_low_sys', 'is_low_dia',
+                # BP trend features (6维)
+                'sys_trend', 'sys_rising', 'sys_falling',
+                'dia_trend', 'dia_rising', 'dia_falling',
+                # Variability indicators (2维)
+                'sys_cv', 'dia_cv'
+            ]
+
+        # Combine feature names / 组合特征名称
+        self.feature_names = base_feature_names + temporal_feature_names + bp_state_feature_names
         
         # 标准化特征
         if self.scaler is not None and len(X) > 0:
