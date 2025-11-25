@@ -17,16 +17,18 @@ GENERAL_MODEL_CONFIG = {
     'model_type': 'xgboost',
 
     # XGBoost parameters for general model / XGBoost通用模型参数
+    # Optimized for better sensitivity to BP variations (Plan G) / 优化以提高对血压变化的敏感性（方案G）
     'xgboost': {
         'n_estimators': 200,
-        'max_depth': 10,
+        'max_depth': 12,          # Increased from 10 to capture finer patterns / 从10增加以捕获更细微的模式
         'learning_rate': 0.1,
         'subsample': 0.8,
         'colsample_bytree': 0.8,
-        'min_child_weight': 3,
-        'gamma': 0.1,
-        'reg_alpha': 0.01,  # L1 regularization / L1正则化
-        'reg_lambda': 1.0,   # L2 regularization / L2正则化
+        'min_child_weight': 1,    # Reduced from 3 to allow finer splits / 从3降低以允许更细的分裂
+        'gamma': 0,               # Removed complexity penalty / 移除复杂度惩罚
+        'reg_alpha': 0.005,       # Reduced L1 regularization from 0.01 / 从0.01降低L1正则化
+        'reg_lambda': 0.3,        # Significantly reduced L2 from 1.0 for wider prediction range / 从1.0大幅降低L2以获得更宽的预测范围
+        'max_delta_step': 2,      # Allow larger prediction steps / 允许更大的预测步长
         'random_state': 42,
         'n_jobs': -1,
         'verbosity': 1
@@ -65,20 +67,22 @@ GENERAL_MODEL_CONFIG = {
 FINE_TUNING_CONFIG = {
     # Fine-tuning strategy / 微调策略
     # Options: 'incremental', 'correction_model'
-    'strategy': 'incremental',
+    # Changed to correction_model for better variation tracking / 改为校正模型以更好地跟踪变化
+    'strategy': 'correction_model',
 
     # XGBoost fine-tuning parameters / XGBoost微调参数
-    # Optimized for better tracking of BP variations / 优化以更好地跟踪血压变化
+    # Optimized for aggressive correction of extreme values (Plan G) / 优化以积极校正极端值（方案G）
     'xgboost': {
         'n_estimators': 200,      # Number of new trees to add / 增量添加的树数量
-        'learning_rate': 0.05,    # Higher LR for better sensitivity / 更高的学习率以获得更好的敏感性
-        'max_depth': 15,          # Deeper trees for complex patterns / 更深的树以捕获复杂模式
+        'learning_rate': 0.1,     # Increased from 0.05 for more aggressive learning / 从0.05提高以更积极地学习
+        'max_depth': 10,          # Reduced from 15 to prevent overfitting on small calib set / 从15降低以防止在小校准集上过拟合
         'subsample': 0.9,         # Slight subsampling / 轻微子采样
         'colsample_bytree': 0.8,
         'min_child_weight': 1,    # Allow finer splits / 允许更细的分裂
-        'gamma': 0.05,            # Lower gamma / 更低的gamma
-        'reg_alpha': 0.01,        # Reduced L1 regularization / 减少L1正则化
-        'reg_lambda': 0.5,        # Reduced L2 regularization / 减少L2正则化
+        'gamma': 0,               # Removed to allow correction model more freedom / 移除以给校正模型更多自由
+        'reg_alpha': 0,           # No L1 regularization for correction model / 校正模型不使用L1正则化
+        'reg_lambda': 0.1,        # Minimal L2 regularization from 0.5 / 从0.5降低L2正则化至最小
+        'max_delta_step': 3,      # Allow larger correction steps / 允许更大的校正步长
         'random_state': 42,
         'n_jobs': -1,
         'verbosity': 1
@@ -119,11 +123,11 @@ DATA_SPLIT_CONFIG = {
     'split_method': 'sample_based',
 
     # Sample-based split / 基于样本的分割
-    # Increased for better personalization / 增加以获得更好的个性化
+    # Reduced to prevent over-smoothing (Plan G) / 减少以防止过度平滑（方案G）
     'sample_based': {
-        'n_samples': 450,  # Number of heartbeats for calibration / 用于校准的心跳数量
-        'min_samples': 250,  # Minimum required samples / 最小所需样本数
-        'max_samples': 700   # Maximum calibration samples / 最大校准样本数
+        'n_samples': 500,  # Reduced from 600 to avoid over-smoothing / 从600减少以避免过度平滑
+        'min_samples': 300,  # Minimum required samples / 最小所需样本数
+        'max_samples': 900   # Maximum calibration samples / 最大校准样本数
     },
 
     # Time-based split / 基于时间的分割

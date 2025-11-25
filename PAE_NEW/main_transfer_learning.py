@@ -79,7 +79,7 @@ class TransferLearningPipeline:
         print("\n[STEP 2/7] Training General Models...")
         general_model_sys, general_model_dia = self._train_general_models(
             X_train, y_train_sys, y_train_dia
-        )
+        ) 
 
         # Step 2.5: Diagnose general model on training set (Plan C)
         # 步骤2.5：诊断通用模型在训练集上的表现（方案C）
@@ -89,9 +89,9 @@ class TransferLearningPipeline:
             X_train, y_train_sys, y_train_dia
         )
 
-        # Step 3: Save general models / 步骤3：保存通用模型
-        print("\n[STEP 3/7] Saving General Models...")
-        self._save_general_models(general_model_sys, general_model_dia)
+        # Step 3: Save general models and scaler / 步骤3：保存通用模型和标准化器
+        print("\n[STEP 3/7] Saving General Models and Scaler...")
+        self._save_general_models(general_model_sys, general_model_dia, scaler)
 
         # Step 4: Load and process test data / 步骤4：加载并处理测试数据
         print("\n[STEP 4/7] Loading and Processing Test Data...")
@@ -277,10 +277,13 @@ class TransferLearningPipeline:
 
         print("\n  " + "-" * 50)
 
-    def _save_general_models(self, model_sys, model_dia):
-        """Save general models / 保存通用模型"""
+    def _save_general_models(self, model_sys, model_dia, scaler=None):
+        """
+        Save general models and scaler.
+        保存通用模型和标准化器。
+        """
         save_dir = get_model_save_path('general')
-        ModelManager.save_general_models(model_sys, model_dia, save_dir)
+        ModelManager.save_general_models(model_sys, model_dia, save_dir, scaler)
 
     def _load_and_process_test_data(self, scaler):
         """

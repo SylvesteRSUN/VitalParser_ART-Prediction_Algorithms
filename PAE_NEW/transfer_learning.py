@@ -534,15 +534,16 @@ class ModelManager:
     """
 
     @staticmethod
-    def save_general_models(model_sys: Any, model_dia: Any, save_dir: str):
+    def save_general_models(model_sys: Any, model_dia: Any, save_dir: str, scaler: Any = None):
         """
-        Save general models.
-        保存通用模型。
+        Save general models and optionally the scaler.
+        保存通用模型和可选的特征标准化器。
 
         Args:
             model_sys: Systolic model / 收缩压模型
             model_dia: Diastolic model / 舒张压模型
             save_dir: Directory to save models / 保存目录
+            scaler: Feature scaler (optional) / 特征标准化器（可选）
         """
         os.makedirs(save_dir, exist_ok=True)
 
@@ -556,22 +557,32 @@ class ModelManager:
         with open(dia_path, 'wb') as f:
             pickle.dump(model_dia, f)
 
-        print(f"General models saved to: {save_dir}")
+        # Save scaler if provided / 保存标准化器（如果提供）
+        if scaler is not None:
+            scaler_path = os.path.join(save_dir, 'feature_scaler.pkl')
+            with open(scaler_path, 'wb') as f:
+                pickle.dump(scaler, f)
+            print(f"General models and scaler saved to: {save_dir}")
+        else:
+            print(f"General models saved to: {save_dir}")
 
     @staticmethod
-    def load_general_models(load_dir: str) -> Tuple[Any, Any]:
+    def load_general_models(load_dir: str, load_scaler: bool = True) -> Tuple[Any, Any, Any]:
         """
-        Load general models.
-        加载通用模型。
+        Load general models and optionally the scaler.
+        加载通用模型和可选的特征标准化器。
 
         Args:
             load_dir: Directory containing models / 包含模型的目录
+            load_scaler: Whether to load scaler / 是否加载标准化器
 
         Returns:
-            Tuple of (model_sys, model_dia) / 模型元组
+            Tuple of (model_sys, model_dia, scaler) / 模型和标准化器元组
+            If load_scaler=False or scaler doesn't exist, returns (model_sys, model_dia, None)
         """
         sys_path = os.path.join(load_dir, 'general_model_systolic.pkl')
         dia_path = os.path.join(load_dir, 'general_model_diastolic.pkl')
+        scaler_path = os.path.join(load_dir, 'feature_scaler.pkl')
 
         with open(sys_path, 'rb') as f:
             model_sys = pickle.load(f)
@@ -579,8 +590,17 @@ class ModelManager:
         with open(dia_path, 'rb') as f:
             model_dia = pickle.load(f)
 
-        print(f"General models loaded from: {load_dir}")
-        return model_sys, model_dia
+        scaler = None
+        if load_scaler and os.path.exists(scaler_path):
+            with open(scaler_path, 'rb') as f:
+                scaler = pickle.load(f)
+            print(f"General models and scaler loaded from: {load_dir}")
+        else:
+            print(f"General models loaded from: {load_dir}")
+            if load_scaler:
+                print(f"  ⚠ Warning: Scaler not found, will need to re-fit on data")
+
+        return model_sys, model_dia, scaler
 
     @staticmethod
     def save_personalized_models(model_sys: Any, model_dia: Any, save_dir: str):
