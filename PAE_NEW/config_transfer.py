@@ -227,7 +227,7 @@ EXPERIMENT_CONFIG = {
 # Helper Functions / 辅助函数
 # ============================================================================
 
-def get_output_path(test_file_name, subdir=None):
+def get_output_path(test_file_name, subdir=None, suffix=''):
     """
     Generate output path for a specific test file.
     为特定测试文件生成输出路径。
@@ -235,12 +235,17 @@ def get_output_path(test_file_name, subdir=None):
     Args:
         test_file_name: Name of test file / 测试文件名
         subdir: Subdirectory name (plots, reports, etc.) / 子目录名
+        suffix: Optional suffix to add to base name (e.g., '_quicktest') / 可选后缀（如'_quicktest'）
 
     Returns:
         Full output path / 完整输出路径
     """
     # Extract filename without extension / 提取不含扩展名的文件名
     base_name = os.path.splitext(os.path.basename(test_file_name))[0]
+
+    # Add suffix if provided / 如果提供了后缀则添加
+    if suffix:
+        base_name = base_name + suffix
 
     # Build path / 构建路径
     path = os.path.join(PATH_CONFIG['output_dir'], base_name)
@@ -272,16 +277,17 @@ def get_model_save_path(model_name, test_file_name=None):
     return path
 
 
-def create_output_directories(test_file_name):
+def create_output_directories(test_file_name, suffix=''):
     """
     Create all necessary output directories.
     创建所有必要的输出目录。
 
     Args:
         test_file_name: Name of test file / 测试文件名
+        suffix: Optional suffix to add to directory name (e.g., '_quicktest') / 可选后缀（如'_quicktest'）
     """
     # Main output directory / 主输出目录
-    base_path = get_output_path(test_file_name)
+    base_path = get_output_path(test_file_name, suffix=suffix)
     os.makedirs(base_path, exist_ok=True)
 
     # Subdirectories / 子目录
@@ -292,7 +298,8 @@ def create_output_directories(test_file_name):
     os.makedirs(get_model_save_path('general'), exist_ok=True)
     os.makedirs(get_model_save_path('personalized', test_file_name), exist_ok=True)
 
-    print(f"Created output directories for: {test_file_name}")
+    display_name = os.path.splitext(os.path.basename(test_file_name))[0] + suffix
+    print(f"Created output directories for: {display_name}")
 
 
 # ============================================================================

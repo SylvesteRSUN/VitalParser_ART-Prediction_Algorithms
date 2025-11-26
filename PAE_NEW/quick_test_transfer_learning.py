@@ -238,9 +238,10 @@ class QuickTestPipeline:
         """
         self.test_file_name = test_file_name
         self.verbose = verbose
+        self.output_suffix = '_quicktest'  # Suffix for output directories / 输出目录后缀
 
-        # Create output directories / 创建输出目录
-        create_output_directories(test_file_name)
+        # Create output directories with _quicktest suffix / 创建带_quicktest后缀的输出目录
+        create_output_directories(test_file_name, suffix=self.output_suffix)
 
         # Results storage / 结果存储
         self.results = {}
@@ -496,7 +497,7 @@ class QuickTestPipeline:
 
         # Save report / 保存报告
         report_path = os.path.join(
-            get_output_path(self.test_file_name, PATH_CONFIG['reports_dir']),
+            get_output_path(self.test_file_name, PATH_CONFIG['reports_dir'], suffix=self.output_suffix),
             'quick_test_report.txt'
         )
         generate_transfer_learning_report(
@@ -510,7 +511,7 @@ class QuickTestPipeline:
         Generate visualizations.
         生成可视化。
         """
-        plots_dir = get_output_path(self.test_file_name, PATH_CONFIG['plots_dir'])
+        plots_dir = get_output_path(self.test_file_name, PATH_CONFIG['plots_dir'], suffix=self.output_suffix)
 
         # Time series comparison / 时间序列对比
         plot_transfer_learning_comparison(
@@ -537,8 +538,8 @@ def main():
     parser.add_argument(
         '--test-file',
         type=str,
-        default='test_patient.mat',
-        help='Test file name (default: test_patient.mat)'
+        default=None,
+        help='Test file path (optional, defaults to config.py setting)'
     )
     parser.add_argument(
         '--verbose',
@@ -549,9 +550,20 @@ def main():
 
     args = parser.parse_args()
 
+    # Get test file path / 获取测试文件路径
+    if args.test_file:
+        # Use command line argument if provided / 如果提供了命令行参数则使用
+        DATA_CONFIG['test_file_path'] = args.test_file
+
+    # Get test file name from full path / 从完整路径获取文件名
+    test_file_path = DATA_CONFIG['test_file_path']
+    test_file_name = os.path.basename(test_file_path)
+
+    print(f"Using test file: {test_file_name}")
+
     # Run quick test / 运行快速测试
     pipeline = QuickTestPipeline(
-        test_file_name=args.test_file,
+        test_file_name=test_file_name,
         verbose=args.verbose
     )
     pipeline.run_quick_test()
