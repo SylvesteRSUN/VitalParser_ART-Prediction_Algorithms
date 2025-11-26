@@ -70,6 +70,13 @@ FINE_TUNING_CONFIG = {
     # Changed to correction_model for better variation tracking / 改为校正模型以更好地跟踪变化
     'strategy': 'correction_model',
 
+    # Sample weighting for extreme values (Plan E) / 极端值样本加权（方案E）
+    'sample_weighting': {
+        'enabled': True,              # Enable sample weighting / 启用样本加权
+        'extreme_multiplier': 2.0,    # Weight multiplier for extreme values (mean ± std) / 极端值权重倍数（均值±标准差）
+        'description': 'Increase weight for BP values beyond mean ± std to improve sensitivity to extreme variations'
+    },
+
     # XGBoost fine-tuning parameters / XGBoost微调参数
     # Optimized for aggressive correction of extreme values (Plan G) / 优化以积极校正极端值（方案G）
     'xgboost': {

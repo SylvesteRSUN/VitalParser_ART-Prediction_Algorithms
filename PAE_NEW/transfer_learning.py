@@ -184,7 +184,8 @@ class PersonalFineTuner:
     为个体患者微调通用模型。
     """
 
-    def __init__(self, model_type='xgboost', strategy='incremental', **fine_tune_params):
+    def __init__(self, model_type='xgboost', strategy='incremental', use_sample_weights=True,
+                 weight_extreme_multiplier=2.0, **fine_tune_params):
         """
         Initialize fine-tuner.
         初始化微调器。
@@ -192,11 +193,15 @@ class PersonalFineTuner:
         Args:
             model_type: 'xgboost', 'lightgbm', or 'gradient_boosting'
             strategy: 'incremental' or 'correction_model' / 微调策略
+            use_sample_weights: Use weighted loss for extreme values (Plan E) / 对极端值使用加权损失（方案E）
+            weight_extreme_multiplier: Weight multiplier for extreme values / 极端值权重倍数
             **fine_tune_params: Fine-tuning hyperparameters / 微调超参数
         """
         self.model_type = model_type
         self.strategy = strategy
         self.fine_tune_params = fine_tune_params
+        self.use_sample_weights = use_sample_weights
+        self.weight_extreme_multiplier = weight_extreme_multiplier
 
         # Fine-tuned models / 微调后的模型
         self.personalized_model_sys = None
@@ -204,6 +209,43 @@ class PersonalFineTuner:
 
         # Fine-tuning history / 微调历史
         self.fine_tuning_history = {}
+
+    def _calculate_sample_weights(self, y: np.ndarray) -> np.ndarray:
+        """
+        Calculate sample weights for extreme BP values (Plan E).
+        为极端血压值计算样本权重（方案E）。
+
+        Args:
+            y: BP values / 血压值
+
+        Returns:
+            Sample weights / 样本权重
+        """
+        if not self.use_sample_weights:
+            return np.ones(len(y))
+
+        # Calculate mean and std / 计算均值和标准差
+        mean = np.mean(y)
+        std = np.std(y)
+
+        # Initialize weights / 初始化权重
+        weights = np.ones(len(y))
+
+        # Identify extreme values / 识别极端值
+        # Extreme = values beyond mean ± std
+        upper_threshold = mean + std
+        lower_threshold = mean - std
+
+        # Apply higher weights to extreme values / 对极端值应用更高权重
+        extreme_mask = (y > upper_threshold) | (y < lower_threshold)
+        weights[extreme_mask] = self.weight_extreme_multiplier
+
+        # Additional weight for very extreme values (beyond mean ± 1.5*std)
+        # 对非常极端的值（超过mean ± 1.5*std）施加额外权重
+        very_extreme_mask = (y > mean + 1.5 * std) | (y < mean - 1.5 * std)
+        weights[very_extreme_mask] = self.weight_extreme_multiplier * 1.5
+
+        return weights
 
     def fine_tune(self, general_model_sys: Any, general_model_dia: Any,
                   X_calib: np.ndarray, y_calib_sys: np.ndarray,
@@ -305,16 +347,27 @@ class PersonalFineTuner:
                     print(f"  Warning: Validation set too small ({n_val}). Disabling early stopping.")
                 use_early_stopping = False
 
+        # Calculate sample weights (Plan E) / 计算样本权重（方案E）
+        sample_weights = self._calculate_sample_weights(y_calib)
+
+        if verbose and self.use_sample_weights:
+            n_extreme = np.sum(sample_weights > 1.0)
+            print(f"  Sample Weighting Enabled:")
+            print(f"    Extreme values: {n_extreme}/{len(y_calib)} ({n_extreme/len(y_calib)*100:.1f}%)")
+            print(f"    Weight multiplier: {self.weight_extreme_multiplier}x")
+
         # Split calibration into train and validation / 将校准数据分为训练和验证
         if use_early_stopping:
             n_val = int(len(X_calib) * val_frac)
             X_train_calib = X_calib[:-n_val]
             y_train_calib = y_calib[:-n_val]
+            sample_weights_train = sample_weights[:-n_val]
             X_val_calib = X_calib[-n_val:]
             y_val_calib = y_calib[-n_val:]
         else:
             X_train_calib = X_calib
             y_train_calib = y_calib
+            sample_weights_train = sample_weights
 
         # XGBoost incremental training / XGBoost增量训练
         if self.model_type == 'xgboost':
@@ -328,6 +381,7 @@ class PersonalFineTuner:
             if use_early_stopping:
                 personalized_model.fit(
                     X_train_calib, y_train_calib,
+                    sample_weight=sample_weights_train,  # Add sample weights
                     xgb_model=general_model.get_booster(),
                     eval_set=[(X_val_calib, y_val_calib)],
                     verbose=verbose
@@ -335,6 +389,7 @@ class PersonalFineTuner:
             else:
                 personalized_model.fit(
                     X_train_calib, y_train_calib,
+                    sample_weight=sample_weights_train,  # Add sample weights
                     xgb_model=general_model.get_booster(),
                     verbose=verbose
                 )
@@ -355,6 +410,7 @@ class PersonalFineTuner:
             if use_early_stopping:
                 personalized_model.fit(
                     X_train_calib, y_train_calib,
+                    sample_weight=sample_weights_train,  # Add sample weights (Plan E)
                     init_model=temp_model_path,
                     eval_set=[(X_val_calib, y_val_calib)],
                     callbacks=[lgb.early_stopping(
@@ -364,6 +420,7 @@ class PersonalFineTuner:
             else:
                 personalized_model.fit(
                     X_train_calib, y_train_calib,
+                    sample_weight=sample_weights_train,  # Add sample weights (Plan E)
                     init_model=temp_model_path
                 )
 
@@ -383,7 +440,7 @@ class PersonalFineTuner:
             personalized_model = GradientBoostingRegressor(
                 **self.fine_tune_params.get('gradient_boosting', {})
             )
-            personalized_model.fit(X_train_calib, y_train_calib)
+            personalized_model.fit(X_train_calib, y_train_calib, sample_weight=sample_weights_train)
 
         else:
             raise ValueError(f"Unknown model type: {self.model_type}")
@@ -421,6 +478,18 @@ class PersonalFineTuner:
         # Calculate residuals / 计算残差
         residuals = y_calib - y_pred_general
 
+        # Calculate sample weights for correction model (Plan E)
+        # Use weights based on true BP values to emphasize extreme values
+        # 为校正模型计算样本权重（方案E）
+        # 基于真实血压值使用权重来强调极端值
+        sample_weights = self._calculate_sample_weights(y_calib)
+
+        if verbose and self.use_sample_weights:
+            n_extreme = np.sum(sample_weights > 1.0)
+            print(f"  Correction Model - Sample Weighting Enabled:")
+            print(f"    Extreme values: {n_extreme}/{len(y_calib)}")
+            print(f"    Weight multiplier: {self.weight_extreme_multiplier}x")
+
         # Train correction model on residuals / 在残差上训练校正模型
         if self.model_type == 'xgboost':
             correction_model = xgb.XGBRegressor(
@@ -444,7 +513,7 @@ class PersonalFineTuner:
                 random_state=42
             )
 
-        correction_model.fit(X_calib, residuals)
+        correction_model.fit(X_calib, residuals, sample_weight=sample_weights)
 
         if verbose:
             # Evaluate correction / 评估校正

@@ -392,11 +392,19 @@ class TransferLearningPipeline:
         # 复制微调参数并移除'strategy'以避免重复
         fine_tune_params = FINE_TUNING_CONFIG.copy()
         fine_tune_params.pop('strategy', None)
+        fine_tune_params.pop('sample_weighting', None)  # Remove sample_weighting dict
+
+        # Get sample weighting parameters (Plan E) / 获取样本加权参数（方案E）
+        sample_weighting = FINE_TUNING_CONFIG.get('sample_weighting', {})
+        use_sample_weights = sample_weighting.get('enabled', True)
+        weight_extreme_multiplier = sample_weighting.get('extreme_multiplier', 2.0)
 
         # Create fine-tuner / 创建微调器
         fine_tuner = PersonalFineTuner(
             model_type=model_type,
             strategy=strategy,
+            use_sample_weights=use_sample_weights,
+            weight_extreme_multiplier=weight_extreme_multiplier,
             **fine_tune_params
         )
 

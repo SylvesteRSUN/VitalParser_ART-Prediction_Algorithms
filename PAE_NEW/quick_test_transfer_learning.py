@@ -437,8 +437,18 @@ class QuickTestPipeline:
         fine_tune_params = FINE_TUNING_CONFIG['xgboost'].copy()
         fine_tune_params.pop('strategy', None)  # Avoid duplicate
 
+        # Get sample weighting parameters (Plan E) / 获取样本加权参数（方案E）
+        sample_weighting = FINE_TUNING_CONFIG.get('sample_weighting', {})
+        use_sample_weights = sample_weighting.get('enabled', True)
+        weight_extreme_multiplier = sample_weighting.get('extreme_multiplier', 2.0)
+
         # Fine-tune / 微调
-        fine_tuner = PersonalFineTuner(strategy=strategy, **fine_tune_params)
+        fine_tuner = PersonalFineTuner(
+            strategy=strategy,
+            use_sample_weights=use_sample_weights,
+            weight_extreme_multiplier=weight_extreme_multiplier,
+            **fine_tune_params
+        )
         fine_tuner.fine_tune(
             general_model_sys, general_model_dia,
             X_calib, y_calib_sys, y_calib_dia,
