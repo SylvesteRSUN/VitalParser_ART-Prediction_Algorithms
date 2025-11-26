@@ -186,6 +186,7 @@ class PatientDataSplitter:
         """
         ratio = self.params['calibration_ratio']
         min_samples = self.params['min_samples']
+        max_samples = self.params.get('max_samples', None)  # Optional max limit / 可选最大限制
 
         # Calculate calibration size / 计算校准集大小
         n_samples = int(n_total * ratio)
@@ -193,10 +194,14 @@ class PatientDataSplitter:
         # Ensure minimum / 确保最小值
         n_samples = max(n_samples, min_samples)
 
-        # Ensure not too large / 确保不太大
+        # Apply maximum limit if specified / 如果指定则应用最大限制
+        if max_samples is not None:
+            n_samples = min(n_samples, max_samples)
+
+        # Ensure not too large (leave at least 20% for evaluation) / 确保不太大（至少留20%用于评估）
         if n_samples >= n_total * 0.8:
             warnings.warn(
-                f"Calibration ratio too large. Reducing to 60% of total.",
+                f"Calibration size too large ({n_samples}). Reducing to 60% of total ({int(n_total * 0.6)}).",
                 UserWarning
             )
             n_samples = int(n_total * 0.6)

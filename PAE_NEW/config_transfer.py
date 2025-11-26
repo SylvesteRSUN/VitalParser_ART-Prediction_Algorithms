@@ -127,7 +127,7 @@ FINE_TUNING_CONFIG = {
 DATA_SPLIT_CONFIG = {
     # Calibration data selection method / 校准数据选择方法
     # Options: 'sample_based', 'time_based', 'ratio_based'
-    'split_method': 'sample_based',
+    'split_method': 'ratio_based',  # Changed to ratio_based for adaptive calibration size / 改为基于比例以自适应校准大小
 
     # Sample-based split / 基于样本的分割
     # Reduced to prevent over-smoothing (Plan G) / 减少以防止过度平滑（方案G）
@@ -146,8 +146,9 @@ DATA_SPLIT_CONFIG = {
 
     # Ratio-based split / 基于比例的分割
     'ratio_based': {
-        'calibration_ratio': 0.25,  # 25% for calibration / 25%用于校准
-        'min_samples': 100          # Minimum calibration samples / 最小校准样本数
+        'calibration_ratio': 0.20,  # 20% for calibration / 20%用于校准
+        'min_samples': 200,         # Minimum calibration samples / 最小校准样本数
+        'max_samples': 1000         # Maximum calibration samples / 最大校准样本数
     },
 
     # Quality control / 质量控制
