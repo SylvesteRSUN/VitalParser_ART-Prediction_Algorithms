@@ -11,12 +11,12 @@ import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
 
-from config import DATA_CONFIG, RUN_CONFIG
-from data_loader import load_train_test_data
-from signal_processing import SignalProcessor
-from feature_extraction import CycleBasedFeatureExtractor
-from models import ModelTrainer
-from evaluation import ModelEvaluator
+from config.config import DATA_CONFIG, RUN_CONFIG
+from core.data_loader import load_train_test_data
+from core.signal_processing import SignalProcessor
+from core.feature_extraction import CycleBasedFeatureExtractor
+from core.models import ModelTrainer
+from transfer_learning_module.evaluation import ModelEvaluator
 
 
 def main():

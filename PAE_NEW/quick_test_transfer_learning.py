@@ -17,19 +17,19 @@ import time
 from datetime import datetime
 
 # Import existing modules / 导入现有模块
-from config import DATA_CONFIG
-from data_loader import load_train_test_data
-from signal_processing import SignalProcessor
-from feature_extraction import CycleBasedFeatureExtractor
+from config.config import DATA_CONFIG
+from core.data_loader import load_train_test_data
+from core.signal_processing import SignalProcessor
+from core.feature_extraction import CycleBasedFeatureExtractor
 
 # Import transfer learning modules / 导入迁移学习模块
-from config_transfer import (
+from config.config_transfer import (
     FINE_TUNING_CONFIG, DATA_SPLIT_CONFIG,
     EVALUATION_CONFIG as TL_EVAL_CONFIG, PATH_CONFIG,
     create_output_directories, get_output_path, get_model_save_path
 )
-from data_splitter import PatientDataSplitter
-from transfer_learning import PersonalFineTuner, ModelManager
+from transfer_learning_module.data_splitter import PatientDataSplitter
+from transfer_learning_module.transfer_learning import PersonalFineTuner, ModelManager
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import matplotlib.pyplot as plt
 
