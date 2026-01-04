@@ -1,0 +1,20 @@
+# ============================================================================
+# 最小依赖清单 | Minimal Requirements
+# 仅包含必需的包，用于快速安装（不包含XGBoost/LightGBM）
+# Only essential packages for quick installation (without XGBoost/LightGBM)
+# ============================================================================
+#
+# 安装方法 | Installation:
+#   pip install -r requirements-minimal.txt
+#
+# 注意 | Note:
+#   使用此文件安装后，需要将 config_transfer.py 中的 model_type 改为 'gradient_boosting'
+#   After installing, change model_type to 'gradient_boosting' in config_transfer.py
+#
+# ============================================================================
+
+numpy>=1.21.0
+scipy>=1.7.0
+scikit-learn>=1.0.0
+matplotlib>=3.5.0
+vitaldb>=1.7.0
